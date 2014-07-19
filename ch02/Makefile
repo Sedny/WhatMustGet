@@ -2,9 +2,9 @@
 
 CC = gcc
 FLAGS = -Wall -g -O2
-objects = my_who my_more
+objects = my_who my_more my_whoami
 
-all: my_who my_more
+all: my_who my_more my_whoami
 
 
 my_who: my_who.o
@@ -13,6 +13,8 @@ my_who: my_who.o
 my_more: my_more.o
 	$(CC) $(FLAGS) -o $@ $?
 
+my_whoami: my_whoami.o
+	$(CC) $(FLAGS) -o $@ $?
 
 
 
