@@ -20,13 +20,11 @@ typedef struct _List {/*{{{*/
     uintmax_t size;
     ListElmt *head;
     ListElmt *tail;
-
     void (*destroy)(void *data);
 }List;/*}}}*/
 
 /*{{{*/
-int list_init(List *list, void (*destroy)(void *data));
-
+List *list_init(void (*destroy)(void *data));
 /* if element is NULL, let the new element be header */
 int list_ins_next(List *list, ListElmt *element, void *data);
 
@@ -47,19 +45,32 @@ void parse_command(int argc, char **argv);/*}}}*/
 #define list_next(element) ((element)->next)/*}}}*/
 
 
+/* Global lable */
+int show_all_file = 0;          /* option -a */
+int file_sort = 0;              /* option -f, equit -aU and disable --color */
+int long_list_format = 0;       /* option -l */
+
+char dir_name[BUFSIZ];
+
 /* Initial the link list */
-int
-list_init(List *list, void (*destroy)(void *data))
+List *
+list_init(void (*destroy)(void *data))
 {/*{{{*/
-    if (list == NULL || destroy == NULL)
-        return -1;
+    List *list;
+
+    if (destroy == NULL)
+        return NULL;
+
+    list = (List *)malloc(sizeof(List));
+    if (list == NULL)
+        return NULL;
 
     list->size = 0;
     list->head = NULL;
     list->tail = NULL;
     list->destroy = destroy;
 
-    return 0;
+    return list;
 }/*}}}*/
 
 int
@@ -248,24 +259,22 @@ list_sort(List *list)
 
 }/*}}}*/
 
+void
+parse_command(int argc, char **argv)
+{
+
+}
+
 int
 main(int argc, char **argv)
 {/*{{{*/
     List *list;
 
-    list = (List *)malloc(sizeof(List));
-    if (list == NULL)
+    if ((list = list_init(data_destroy)) == NULL)
         exit(EXIT_FAILURE);
 
-    if (list_init(list, data_destroy) == -1)
-        exit(EXIT_FAILURE);
-
-
-    if (argc == 1)
-        read_dir(list, ".");
-    else
-        read_dir(list, argv[1]);
-
+    /* read the command line option */
+    parse_command(argc, argv);
 
     exit(EXIT_SUCCESS);
 }/*}}}*/
