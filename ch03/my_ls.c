@@ -11,6 +11,7 @@
 #include <getopt.h>
 
 
+typedef void (*destroy_t)(void *);
 typedef struct _ListElmt {/*{{{*/
     void *data;
     struct _ListElmt *next;
@@ -24,16 +25,19 @@ typedef struct _List {/*{{{*/
 }List;/*}}}*/
 
 /*{{{*/
-List *list_init(void (*destroy)(void *data));
+int list_init(List **list, destroy_t destroy);
 /* if element is NULL, let the new element be header */
 int list_ins_next(List *list, ListElmt *element, void *data);
 
 int list_rem_next(List *list, ListElmt *element, void **data);
 int list_destroy(List *list);
 void data_destroy(void *data);
-void read_dir(List *list, const char *dir);
+void read_dir(const char *dir);
 void list_sort(List *list);
 void parse_command(int argc, char **argv);/*}}}*/
+void help_funtion(void);
+void print_version(void);
+
 
 #define list_size(list) ((list)->size)/*{{{*/
 #define list_head(list) ((list)->head)
@@ -44,33 +48,34 @@ void parse_command(int argc, char **argv);/*}}}*/
 #define list_data(element) ((list)->data)
 #define list_next(element) ((element)->next)/*}}}*/
 
-
+#define CURRENT_DIR "."
 /* Global lable */
 int show_all_file = 0;          /* option -a */
-int file_sort = 0;              /* option -f, equit -aU and disable --color */
+int unsort = 0;              /* option -U, do not sort the files */
 int long_list_format = 0;       /* option -l */
 
 char dir_name[BUFSIZ];
+List *list;
 
 /* Initial the link list */
-List *
-list_init(void (*destroy)(void *data))
+int
+list_init(List **list, destroy_t destroy)
 {/*{{{*/
-    List *list;
+    if (destroy == NULL) {
+        return -1;
+    }
 
-    if (destroy == NULL)
-        return NULL;
+    *list = (List *)malloc(sizeof(List));
+    if (list == NULL) {
+        return -1;
+    }
 
-    list = (List *)malloc(sizeof(List));
-    if (list == NULL)
-        return NULL;
+    (*list)->size = 0;
+    (*list)->head = NULL;
+    (*list)->tail = NULL;
+    (*list)->destroy = destroy;
 
-    list->size = 0;
-    list->head = NULL;
-    list->tail = NULL;
-    list->destroy = destroy;
-
-    return list;
+    return 0;
 }/*}}}*/
 
 int
@@ -78,17 +83,20 @@ list_ins_next(List *list, ListElmt *element, void *data)
 {/*{{{*/
     ListElmt *new_element;
 
-    if (list == NULL)
+    if (list == NULL) {
         return -1;
+    }
 
-    if ((new_element = (ListElmt *)malloc(sizeof(ListElmt))) == NULL)
+    if ((new_element = (ListElmt *)malloc(sizeof(ListElmt))) == NULL) {
         return -1;
+    }
 
     new_element->data = (void *)data;
 
     if (element == NULL) {
-        if (list_size(list) == 0)
+        if (list_size(list) == 0) {
             list->tail = new_element;
+        }
 
         new_element->next = list->head;
         list->head = new_element;
@@ -96,10 +104,12 @@ list_ins_next(List *list, ListElmt *element, void *data)
         new_element->next = element->next;
         element->next = new_element;
 
-        if (list_tail(list) == element)
+        if (list_tail(list) == element) {
             list->tail = new_element;
+        }
     }
 
+    list->size++;
     return 0;
 }/*}}}*/
 
@@ -108,24 +118,28 @@ list_rem_next(List *list, ListElmt *element, void **data)
 {/*{{{*/
     ListElmt *rm_element;
 
-    if (list == NULL)
+    if (list == NULL) {
         return -1;
+    }
 
     if (element == NULL) {
         rm_element = list_head(list);
         list->head = list->head->next;
 
-        if (list_size(list) == 1)
+        if (list_size(list) == 1) {
             list->tail = NULL;
+        }
     } else {
-        if (list_tail(list) == element)
+        if (list_tail(list) == element) {
             return -1;
+        }
 
         rm_element = element->next;
         element->next = rm_element->next;
 
-        if (element->next == NULL)
+        if (element->next == NULL) {
             list->tail = element;
+        }
     }
 
     *data = rm_element->data;
@@ -141,8 +155,9 @@ list_destroy(List *list)
     void *data;
 
     while (list_size(list) > 0) {
-        if (list_rem_next(list, NULL, (void **)&data) == 0 && list->destroy != NULL)
+        if (list_rem_next(list, NULL, (void **)&data) == 0 && list->destroy != NULL) {
             list->destroy(data);
+        }
     }
 
     free(list);
@@ -155,7 +170,7 @@ data_destroy(void *data)
 }/*}}}*/
 
 void
-read_dir(List *list, const char *dirname)
+read_dir(const char *dirname)
 {/*{{{*/
     DIR *dirptr;
     struct dirent *direntptr;
@@ -163,8 +178,14 @@ read_dir(List *list, const char *dirname)
     char *data;
 
 
-    if (dirname == NULL)
+    if (dirname == NULL) {
         exit(EXIT_FAILURE);
+    }
+
+    /* Initialize link list */
+    if (list_init(&list, data_destroy) == -1) {
+        exit(EXIT_FAILURE);
+    }
 
     if ((dirptr = opendir(dirname)) == NULL) {
         printf("open directory error\n");
@@ -172,19 +193,26 @@ read_dir(List *list, const char *dirname)
     }
 
     while ((direntptr = readdir(dirptr)) != NULL) {
-        if (strncmp(direntptr->d_name, ".", 1) == 0)
-            continue;
+        if (show_all_file == 0) {
+            if (strncmp(direntptr->d_name, ".", 1) == 0) {
+                continue;
+            }
+        }
 
         data = (char *)malloc((strlen(direntptr->d_name) + 1) * sizeof(char));
-        if (data == NULL)
+        if (data == NULL) {
             exit(EXIT_FAILURE);
+        }
 
         strcpy(data, direntptr->d_name);
         list_ins_next(list, listelmt, (void *)data);
         listelmt = list_tail(list);
     }
 
-    list_sort(list);
+    if (unsort == 0) {
+        list_sort(list);
+    }
+
 #ifdef DEBUG
     int i = 0;
     listelmt = list_head(list);
@@ -243,10 +271,12 @@ list_sort(List *list)
             }
 
             /*  若交换双方为head或tail结点，重置head/tail */
-            if (element1 == list_head(list))
+            if (element1 == list_head(list)) {
                 list->head = element2;
-            if (element2 == list_tail(list))
+            }
+            if (element2 == list_tail(list)) {
                 list->tail = element1;
+            }
 
             /* 重新调整element1，使之指向排序的数据 */
             prev_e2 = element1;
@@ -260,18 +290,68 @@ list_sort(List *list)
 }/*}}}*/
 
 void
-parse_command(int argc, char **argv)
+help_funtion(void)
 {
 
 }
 
+void
+print_version(void)
+{
+
+}
+
+void
+parse_command(int argc, char **argv)
+{/*{{{*/
+    const char *optstrings = "afUl";
+    const struct option longopts[] = {
+        {"all", no_argument, NULL, 'a'},
+        {"help", no_argument, NULL, 'h'},
+        {"version", no_argument, NULL, 'v'},
+        {NULL, 0, NULL, 0}
+    };
+
+    int longindex;
+    int optarg;
+    int index;
+
+    while ((optarg = getopt_long(argc, argv, optstrings,
+                        longopts,&longindex)) != -1) {
+        switch (optarg) {
+            case 'h':
+                help_funtion();
+                exit(EXIT_SUCCESS);
+            case 'v':
+                print_version();
+                exit(EXIT_SUCCESS);
+            case '?':
+                printf("Try 'ls --help' for more information.\n");
+                exit(EXIT_FAILURE);
+            case 'a':
+                show_all_file = 1;
+                break;
+            case 'l':
+                long_list_format = 1;
+                break;
+            case 'U':
+                unsort = 1;
+                break;
+        }
+    }
+
+    if (optind == argc) {
+        read_dir(CURRENT_DIR);
+    } else {
+        for (index = optind; index < argc; index++) {
+            read_dir(argv[index]);
+        }
+    }
+}/*}}}*/
+
 int
 main(int argc, char **argv)
 {/*{{{*/
-    List *list;
-
-    if ((list = list_init(data_destroy)) == NULL)
-        exit(EXIT_FAILURE);
 
     /* read the command line option */
     parse_command(argc, argv);
