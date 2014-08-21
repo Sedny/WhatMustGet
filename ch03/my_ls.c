@@ -37,7 +37,7 @@ void list_sort(List *list);
 void parse_command(int argc, char **argv);/*}}}*/
 void help_funtion(void);
 void print_version(void);
-
+void print_long_format(const char *filename);
 
 #define list_size(list) ((list)->size)/*{{{*/
 #define list_head(list) ((list)->head)
@@ -161,6 +161,8 @@ list_destroy(List *list)
     }
 
     free(list);
+
+    return 0;
 }/*}}}*/
 
 void
@@ -291,15 +293,15 @@ list_sort(List *list)
 
 void
 help_funtion(void)
-{
+{/*{{{*/
 
-}
+}/*}}}*/
 
 void
 print_version(void)
-{
+{/*{{{*/
 
-}
+}/*}}}*/
 
 void
 parse_command(int argc, char **argv)
@@ -337,6 +339,10 @@ parse_command(int argc, char **argv)
             case 'U':
                 unsort = 1;
                 break;
+            case 'f':
+                show_all_file = 1;
+                unsort = 1;
+                break;
         }
     }
 
@@ -348,6 +354,13 @@ parse_command(int argc, char **argv)
         }
     }
 }/*}}}*/
+
+void
+print_long_format(const char *filename)
+{
+    struct stat statbuf;
+
+}
 
 int
 main(int argc, char **argv)
