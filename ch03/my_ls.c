@@ -9,6 +9,9 @@
 #include <stdint.h>
 #include <dirent.h>
 #include <getopt.h>
+#include <time.h>
+#include <pwd.h>
+#include <grp.h>
 
 
 typedef void (*destroy_t)(void *);
@@ -38,6 +41,7 @@ void parse_command(int argc, char **argv);/*}}}*/
 void help_funtion(void);
 void print_version(void);
 void print_long_format(const char *filename);
+void get_file_mode(const struct stat statbuf, char *file_mode);
 
 #define list_size(list) ((list)->size)/*{{{*/
 #define list_head(list) ((list)->head)
@@ -215,6 +219,13 @@ read_dir(const char *dirname)
         list_sort(list);
     }
 
+    if (long_list_format == 1) {
+        listelmt = list_head(list);
+        while (listelmt != NULL) {
+            print_long_format(listelmt->data);
+            listelmt = listelmt->next;
+        }
+    }
 #ifdef DEBUG
     int i = 0;
     listelmt = list_head(list);
@@ -357,10 +368,108 @@ parse_command(int argc, char **argv)
 
 void
 print_long_format(const char *filename)
-{
+{/*{{{*/
     struct stat statbuf;
+    char file_mode[11] = "----------";
+    char file_date[25];
+    struct passwd *pwptr;
+    struct group *grptr;
 
-}
+
+    if (lstat(filename, &statbuf) == -1) {
+        printf("Can not get %s's status\n", filename);
+        exit(EXIT_FAILURE);
+    }
+
+    pwptr = getpwuid(statbuf.st_uid);
+    grptr = getgrgid(statbuf.st_gid);
+    get_file_mode(statbuf, file_mode);
+    strftime(file_date, 25, "%b %e %H:%M", localtime(&statbuf.st_mtime));
+
+    printf("%s ", file_mode);
+    printf("%d ", (int)statbuf.st_nlink);
+    printf("%s ", pwptr->pw_name);
+    printf("%s ", grptr->gr_name);
+    printf("%5d ", (int)statbuf.st_size);
+    printf("%s ", file_date);
+    printf("%s ", filename);
+    printf("\n");
+}/*}}}*/
+
+void
+get_file_mode(const struct stat statbuf, char *file_mode)
+{/*{{{*/
+    mode_t mode = statbuf.st_mode;
+
+    if (S_ISDIR(mode)) {
+        file_mode[0] = 'd';
+    } else if (S_ISCHR(mode)) {
+        file_mode[0] = 'c';
+    } else if (S_ISBLK(mode)) {
+        file_mode[0] = 'b';
+    } else if (S_ISFIFO(mode)) {
+        file_mode[0] = 'p';
+    } else if (S_ISLNK(mode)) {
+        file_mode[0] = 'l';
+    } else if (S_ISSOCK(mode)) {
+        file_mode[0] = 's';
+    }
+
+    /* owner's permission */
+    if ((mode & S_IRUSR) != 0) {
+        file_mode[1] = 'r';
+    }
+    if ((mode & S_IWUSR) != 0) {
+        file_mode[2] = 'w';
+    }
+    if ((mode & S_IXUSR) != 0) {
+        if ((mode & S_ISUID) != 0) {
+            file_mode[3] = 's';
+        } else {
+            file_mode[3] = 'x';
+        }
+    } else if ((mode & S_ISUID) != 0) {
+            file_mode[3] = 'S';
+    }
+
+    /* groups' permission */
+    if ((mode & S_IRGRP) != 0) {
+        file_mode[4] = 'r';
+    }
+    if ((mode & S_IWGRP) != 0) {
+        file_mode[5] = 'w';
+    }
+    if ((mode & S_IXGRP) != 0) {
+        if ((mode & S_ISGID) != 0) {
+            file_mode[6] = 's';
+        } else {
+            file_mode[6] = 'x';
+        }
+    } else {
+        if ((mode & S_ISGID) != 0) {
+            file_mode[6] = 'S';
+        }
+    }
+
+    /* Others' permission */
+    if ((mode & S_IROTH) != 0) {
+        file_mode[7] = 'r';
+    }
+    if ((mode & S_IWOTH) != 0) {
+        file_mode[8] = 'w';
+    }
+    if ((mode & S_IXOTH) != 0) {
+        if ((mode & S_ISVTX) != 0) {
+            file_mode[9] = 't';
+        } else {
+            file_mode[9] = 'x';
+        }
+    } else {
+        if ((mode & S_ISVTX) != 0) {
+            file_mode[9] = 'T';
+        }
+    }
+}/*}}}*/
 
 int
 main(int argc, char **argv)
